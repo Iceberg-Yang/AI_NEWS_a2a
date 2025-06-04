@@ -1,13 +1,22 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import requests
+from config import GNEWS_URL, NEWS_ANALYZER_URL, ALLOWED_ORIGINS
 
 app = FastAPI()
 
-# GNews 配置
-GNEWS_API_KEY = "7b1a790f8c7a63b72165650a18822f0e"  # 请替换为你自己的 key
-GNEWS_URL = f"https://gnews.io/api/v4/top-headlines?token={GNEWS_API_KEY}&lang=zh&country=cn&max=5"
-NEWS_ANALYZER_URL = "http://localhost:8001/a2a/message"  # 指向分析端
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# 挂载静态文件目录
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 从 GNews 获取新闻
 def fetch_news_from_gnews():
@@ -30,7 +39,10 @@ def fetch_news_from_gnews():
         print(f"获取 GNews 新闻失败: {e}")
         return None
     
-@app.get("/collect")
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to AI News Analysis System"}
+
 @app.get("/collect")
 async def collect_news_and_send():
     # 获取真实新闻
@@ -57,11 +69,13 @@ async def collect_news_and_send():
     response = requests.post(NEWS_ANALYZER_URL, json=payload)
 
     if response.status_code == 200:
-        # 解析 DeepSeek 返回的分析结果
         result = response.json()
         return {
             "status": "success",
-            "analysis_result": result["content"]
+            "analysis_result": {
+                "raw_news": raw_news,
+                "raw_analysis": result["content"].get("raw_analysis", "无分析结果")
+            }
         }
     else:
         return {
